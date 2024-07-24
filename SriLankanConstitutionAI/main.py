@@ -17,7 +17,6 @@ client = InferenceClient(
     token="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",
 )
 
-
 # Load, split, and retrieve documents from a local PDF file
 def loadAndRetrieveDocuments() -> Chroma:
     loader = pdf.PyPDFLoader("constitution.pdf")
@@ -28,24 +27,30 @@ def loadAndRetrieveDocuments() -> Chroma:
     vectorStore = Chroma.from_documents(documents=documentSplits, embedding=embeddings)
     return vectorStore.as_retriever()
 
-
 # Format a list of documents into a string
 def formatDocuments(documents: list) -> str:
     return "\n\n".join(document.page_content for document in documents)
 
+retriever = loadAndRetrieveDocuments()
+
+# Chat history
+chat_history = []
 
 # Define the RAG chain function
-def ragChain(question: str) -> str:
-    retriever = loadAndRetrieveDocuments()
+def ragChain(question: str, include_history: bool) -> str:
+    global chat_history
     retrievedDocuments = retriever.invoke(question)
     formattedContext = formatDocuments(retrievedDocuments)
     formattedPrompt = f"Question: {question}\n\nContext: {formattedContext}"
 
-    '''response = ollama.chat(model='llama3', messages=[{'role': 'user', 'content': formattedPrompt}])
-    return response['message']['content']'''
+    # Prepare messages with or without history based on checkbox state
+    if include_history:
+        messages = chat_history + [{"role": "user", "content": formattedPrompt}]
+    else:
+        messages = [{"role": "user", "content": formattedPrompt}]
 
     response = client.chat_completion(
-        messages=[{"role": "user", "content": formattedPrompt}],
+        messages=messages,
         max_tokens=500,
         stream=False
     )
@@ -54,13 +59,20 @@ def ragChain(question: str) -> str:
     if response and response.choices:
         generated_text = response.choices[0].message.content
 
-    return generated_text or "No response generated"
+    # Update chat history if including history
+    if include_history:
+        chat_history.append({"role": "user", "content": formattedPrompt})
+        chat_history.append({"role": "assistant", "content": generated_text})
 
+    return generated_text or "No response generated"
 
 # Gradio interface
 interface = gr.Interface(
     fn=ragChain,
-    inputs="text",
+    inputs=[
+        gr.Textbox(label="Question"),
+        gr.Checkbox(label="Include Chat History", value=True)
+    ],
     outputs="text",
     title="Q & A on Sri Lankan Constitution"
 )
