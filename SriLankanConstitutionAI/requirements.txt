@@ -2,7 +2,7 @@ gradio
 langchain==0.0.167
 langchain_community
 ollama
-PyPDF2
+pypdf
 chromadb
 requests
 huggingface-hub
