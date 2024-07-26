@@ -22,18 +22,19 @@ client = InferenceClient(
 
 model_name = "all-MiniLM-L6-v2.gguf2.f16.gguf"
 gpt4all_kwargs = {'allow_download': 'false'}
-# Load, split, and retrieve documents from a local PDF file
+
+
 def loadAndRetrieveDocuments() -> VectorStoreRetriever:
-    loader = pdf.PyPDFLoader("constitution.pdf")  #constitution
+    loader = pdf.PyPDFLoader("constitution.pdf")  # constitution
     documents = loader.load()
     textSplitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     documentSplits = textSplitter.split_documents(documents)
     embeddings = OllamaEmbeddings(model="nomic-embed-text")
-    vectorStore = Chroma.from_documents(documents=documentSplits, embedding=GPT4AllEmbeddings(model_name=model_name, gpt4all_kwargs=gpt4all_kwargs))
+    vectorStore = Chroma.from_documents(documents=documentSplits, embedding=GPT4AllEmbeddings(model_name=model_name,
+                                                                                              gpt4all_kwargs=gpt4all_kwargs))
     return vectorStore.as_retriever()
 
 
-# Format a list of documents into a string
 def formatDocuments(documents: list) -> str:
     return "\n\n".join(document.page_content for document in documents)
 
@@ -44,18 +45,13 @@ retriever = loadAndRetrieveDocuments()
 chat_history = []
 
 
-# Define the RAG chain function
-def ragChain(question: str, include_history: bool) -> str:
+def ragChain(question: str) -> str:
     global chat_history
     retrievedDocuments = retriever.invoke(question)
     formattedContext = formatDocuments(retrievedDocuments)
     formattedPrompt = f"Question: {question}\n\nContext: {formattedContext}"
 
-    # Prepare messages with or without history based on checkbox state
-    if include_history:
-        messages = chat_history + [{"role": "user", "content": formattedPrompt}]
-    else:
-        messages = [{"role": "user", "content": formattedPrompt}]
+    messages = chat_history + [{"role": "user", "content": formattedPrompt}]
 
     response = client.chat_completion(
         messages=messages,
@@ -67,10 +63,9 @@ def ragChain(question: str, include_history: bool) -> str:
     if response and response.choices:
         generated_text = response.choices[0].message.content
 
-    # Update chat history if including history
-    if include_history:
-        chat_history.append({"role": "user", "content": formattedPrompt})
-        chat_history.append({"role": "assistant", "content": generated_text})
+    # Update chat history
+    chat_history.append({"role": "user", "content": formattedPrompt})
+    chat_history.append({"role": "assistant", "content": generated_text})
 
     return generated_text or "No response generated"
 
@@ -78,12 +73,12 @@ def ragChain(question: str, include_history: bool) -> str:
 # Gradio interface
 interface = gr.Interface(
     fn=ragChain,
-    inputs=[
-        gr.Textbox(label="Question"),
-        gr.Checkbox(label="Include Chat History", value=True)
-    ],
+    inputs=gr.Textbox(label="Question"),
     outputs="text",
-    title="Q & A on Sri Lankan Constitution"
+    title="Q & A on Sri Lankan Constitution",
+    description="<div style='text-align: center;font-size: 18px;'>Brought to you by<a "
+                "href='https://www.linkedin.com/in/kanishka-gunawardana-8955b937/' target='_blank'>"
+                "  Kanishka Yohan Gunawardana</a></div>"
 )
 
 # Launch the app
