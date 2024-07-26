@@ -7,11 +7,12 @@ from langchain_community.document_loaders import pdf
 from langchain_community.embeddings import OllamaEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_core.vectorstores import VectorStoreRetriever
-
+from langchain.embeddings import GPT4AllEmbeddings
 # instructions to start
 # https://www.linkedin.com/pulse/enhance-document-management-ai-extract-insights-from-pdfs-le-sueur-kfd5f/
 # https://github.com/RexiaAI/codeExamples/blob/main/localRAG/RAG.py
 # ollama pull nomic-embed-text
+#https://python.langchain.com/v0.2/docs/integrations/text_embedding/gpt4all/
 load_dotenv('secret.env')  #remove string if hosting in huggingface
 token = os.getenv('HUGGINGFACE_TOKEN')
 client = InferenceClient(
@@ -19,15 +20,16 @@ client = InferenceClient(
     token=token,
 )
 
-
+model_name = "all-MiniLM-L6-v2.gguf2.f16.gguf"
+gpt4all_kwargs = {'allow_download': 'false'}
 # Load, split, and retrieve documents from a local PDF file
 def loadAndRetrieveDocuments() -> VectorStoreRetriever:
-    loader = pdf.PyPDFLoader("k.pdf")  #constitution
+    loader = pdf.PyPDFLoader("constitution.pdf")  #constitution
     documents = loader.load()
     textSplitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     documentSplits = textSplitter.split_documents(documents)
     embeddings = OllamaEmbeddings(model="nomic-embed-text")
-    vectorStore = Chroma.from_documents(documents=documentSplits, embedding=embeddings)
+    vectorStore = Chroma.from_documents(documents=documentSplits, embedding=GPT4AllEmbeddings(model_name=model_name, gpt4all_kwargs=gpt4all_kwargs))
     return vectorStore.as_retriever()
 
 

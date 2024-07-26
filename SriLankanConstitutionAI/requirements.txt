@@ -1,8 +1,14 @@
 gradio
-langchain==0.0.167
+langchain
 langchain_community
 ollama
 pypdf
 chromadb
 requests
 huggingface-hub
+python-dotenv
+langchain-core
+PyPDF2
+chroma
+pydantic
+gpt4all
