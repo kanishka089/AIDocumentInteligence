@@ -1,30 +1,28 @@
+import os
 import gradio as gr
+from dotenv import load_dotenv
+from huggingface_hub import InferenceClient
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import pdf
-from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import OllamaEmbeddings
-import ollama
-from huggingface_hub import InferenceClient
-import requests
-import urllib3
-from dotenv import load_dotenv
-import os
-from nomic import embed
+from langchain_community.vectorstores import Chroma
+from langchain_core.vectorstores import VectorStoreRetriever
 
 # instructions to start
 # https://www.linkedin.com/pulse/enhance-document-management-ai-extract-insights-from-pdfs-le-sueur-kfd5f/
 # https://github.com/RexiaAI/codeExamples/blob/main/localRAG/RAG.py
 # ollama pull nomic-embed-text
-load_dotenv('secret.env')#remove string if hosting in huggingface
+load_dotenv('secret.env')  #remove string if hosting in huggingface
 token = os.getenv('HUGGINGFACE_TOKEN')
 client = InferenceClient(
     "meta-llama/Meta-Llama-3-8B-Instruct",
-    token=token
+    token=token,
 )
 
+
 # Load, split, and retrieve documents from a local PDF file
-def loadAndRetrieveDocuments() -> Chroma:
-    loader = pdf.PyPDFLoader("k.pdf")#constitution
+def loadAndRetrieveDocuments() -> VectorStoreRetriever:
+    loader = pdf.PyPDFLoader("k.pdf")  #constitution
     documents = loader.load()
     textSplitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     documentSplits = textSplitter.split_documents(documents)
@@ -57,26 +55,22 @@ def ragChain(question: str, include_history: bool) -> str:
     else:
         messages = [{"role": "user", "content": formattedPrompt}]
 
-    try:
-        response = client.chat_completion(
-            messages=messages,
-            max_tokens=500,
-            stream=False
-        )
-        # Extract the generated response text using dataclass attributes
-        generated_text = ""
-        if response and response.choices:
-            generated_text = response.choices[0].message.content
+    response = client.chat_completion(
+        messages=messages,
+        max_tokens=500,
+        stream=False
+    )
+    # Extract the generated response text using dataclass attributes
+    generated_text = ""
+    if response and response.choices:
+        generated_text = response.choices[0].message.content
 
-        # Update chat history if including history
-        if include_history:
-            chat_history.append({"role": "user", "content": formattedPrompt})
-            chat_history.append({"role": "assistant", "content": generated_text})
+    # Update chat history if including history
+    if include_history:
+        chat_history.append({"role": "user", "content": formattedPrompt})
+        chat_history.append({"role": "assistant", "content": generated_text})
 
-        return generated_text or "No response generated"
-
-    except requests.exceptions.RequestException as e:
-        return f"Error: {e}"
+    return generated_text or "No response generated"
 
 
 # Gradio interface
