@@ -8,12 +8,8 @@ from langchain_community.embeddings import OllamaEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_core.vectorstores import VectorStoreRetriever
 from langchain.embeddings import GPT4AllEmbeddings
-# instructions to start
-# https://www.linkedin.com/pulse/enhance-document-management-ai-extract-insights-from-pdfs-le-sueur-kfd5f/
-# https://github.com/RexiaAI/codeExamples/blob/main/localRAG/RAG.py
-# ollama pull nomic-embed-text
-#https://python.langchain.com/v0.2/docs/integrations/text_embedding/gpt4all/
-load_dotenv('secret.env')  #remove string if hosting in huggingface
+
+load_dotenv('secret.env')  # remove string if hosting in huggingface
 token = os.getenv('HUGGINGFACE_TOKEN')
 client = InferenceClient(
     "meta-llama/Meta-Llama-3-8B-Instruct",
@@ -49,13 +45,15 @@ def ragChain(question: str) -> str:
     global chat_history
     retrievedDocuments = retriever.invoke(question)
     formattedContext = formatDocuments(retrievedDocuments)
-    formattedPrompt = f"Question: {question}\n\nContext: {formattedContext}"
+    formattedPrompt = (f"Question: {question}\n\n"
+                       f"Context: {formattedContext}\n\n"
+                       f"Please provide a detailed and explanatory answer based solely on the provided context.")
 
     messages = chat_history + [{"role": "user", "content": formattedPrompt}]
 
     response = client.chat_completion(
         messages=messages,
-        max_tokens=500,
+        max_tokens=800,
         stream=False
     )
     # Extract the generated response text using dataclass attributes
@@ -69,17 +67,37 @@ def ragChain(question: str) -> str:
 
     return generated_text or "No response generated"
 
-
 # Gradio interface
-interface = gr.Interface(
-    fn=ragChain,
-    inputs=gr.Textbox(label="Question"),
-    outputs="text",
-    title="Q & A on Sri Lankan Constitution",
-    description="<div style='text-align: center;font-size: 18px;'>Brought to you by<a "
-                "href='https://www.linkedin.com/in/kanishka-gunawardana-8955b937/' target='_blank'>"
-                "  Kanishka Yohan Gunawardana</a></div>"
-)
+with gr.Blocks() as demo:
+    with gr.Row():
+        with gr.Column():
+            textbox = gr.Textbox(label="Question")
+            with gr.Row():
+                buttonTerms = gr.Button("Terms")
+                button = gr.Button("Submit")
 
-# Launch the app
-interface.launch()
+        with gr.Column():
+            output = gr.Textbox(label="Output")
+
+
+    def on_button_click(question):
+        # Call the ragChain function with the question
+        answer = ragChain(question)
+        return answer
+
+    def on_term_button_click():
+        return ("The information provided by this application is generated using advanced technologies, including "
+                "natural language processing models, document retrieval systems, and embeddings-based search "
+                "algorithms. While these technologies are designed to offer accurate and relevant information, "
+                "they may not always be up-to-date or fully accurate.The owner of this application does not accept "
+                "any responsibility for potential inaccuracies, misleading information, or any consequences that may "
+                "arise from the use of the application. Users are encouraged to verify the information independently "
+                "and consult additional sources when making decisions based on the information provided by this app.")
+
+
+    # Bind the button to the function
+    button.click(on_button_click, inputs=textbox, outputs=output)
+    buttonTerms.click(on_term_button_click, outputs=output)
+
+
+demo.launch()
