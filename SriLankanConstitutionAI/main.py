@@ -1,4 +1,6 @@
 import os
+import requests
+import tempfile
 import gradio as gr
 from dotenv import load_dotenv
 from huggingface_hub import InferenceClient
@@ -20,12 +22,34 @@ model_name = "all-MiniLM-L6-v2.gguf2.f16.gguf"
 gpt4all_kwargs = {'allow_download': 'false'}
 
 
-def loadAndRetrieveDocuments() -> VectorStoreRetriever:
-    loader = pdf.PyPDFLoader("constitution.pdf")  # constitution
+# Function to download the PDF from a URL and load documents
+def loadAndRetrieveDocuments(url: str, local_file_path: str) -> VectorStoreRetriever:
+    try:
+        # Attempt to download PDF
+        response = requests.get(url)
+        response.raise_for_status()  # Ensure we notice bad responses
+
+        # Save PDF to a temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+            temp_file.write(response.content)
+            temp_pdf_path = temp_file.name
+
+    except Exception as e:
+        print(f"Failed to download PDF from URL: {e}")
+        # Use local file if URL download fails
+        temp_pdf_path = local_file_path
+
+    # Load the PDF from the temporary file
+    loader = pdf.PyPDFLoader(temp_pdf_path)
     documents = loader.load()
+
+    # Clean up temporary file if created
+    if temp_pdf_path != local_file_path:
+        os.remove(temp_pdf_path)
+
+    # Process documents
     textSplitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     documentSplits = textSplitter.split_documents(documents)
-    embeddings = OllamaEmbeddings(model="nomic-embed-text")
     vectorStore = Chroma.from_documents(documents=documentSplits, embedding=GPT4AllEmbeddings(model_name=model_name,
                                                                                               gpt4all_kwargs=gpt4all_kwargs))
     return vectorStore.as_retriever()
@@ -35,7 +59,12 @@ def formatDocuments(documents: list) -> str:
     return "\n\n".join(document.page_content for document in documents)
 
 
-retriever = loadAndRetrieveDocuments()
+# Define URL and local file path
+url = "http://www.parliament.lk/files/pdf/constitution.pdf"
+local_file_path = "constitution.pdf"  # Local file path
+
+# Load documents from URL or local file
+retriever = loadAndRetrieveDocuments(url, local_file_path)
 
 # Chat history
 chat_history = []
@@ -47,13 +76,13 @@ def ragChain(question: str) -> str:
     formattedContext = formatDocuments(retrievedDocuments)
     formattedPrompt = (f"Question: {question}\n\n"
                        f"Context: {formattedContext}\n\n"
-                       f"Please provide a detailed and explanatory answer based solely on the provided context.")
+                       f"Please provide a detailed answer based solely on the provided context.")
 
     messages = chat_history + [{"role": "user", "content": formattedPrompt}]
 
     response = client.chat_completion(
         messages=messages,
-        max_tokens=800,
+        max_tokens=700,
         stream=False
     )
     # Extract the generated response text using dataclass attributes
@@ -73,11 +102,11 @@ with gr.Blocks() as demo:
         with gr.Column():
             textbox = gr.Textbox(label="Question")
             with gr.Row():
-                buttonTerms = gr.Button("Terms")
+                buttonTerms = gr.Button("Terms of use")
                 button = gr.Button("Submit")
 
         with gr.Column():
-            output = gr.Textbox(label="Output")
+            output = gr.Textbox(label="Output", lines=25)
 
 
     def on_button_click(question):
